@@ -7,6 +7,7 @@ bulletbot.bulletbot
 Defines :class:`.BulletBot`.
 """
 
+import calendar
 import configargparse
 import logging
 import markovify
@@ -411,6 +412,33 @@ class BulletBot(object):
 
         return bullets
 
+    def get_bullets_after(self, datetime):
+        """Load bullets for all users sent since `datetime` and return a
+        dictionary with `str` keys (the realname or nick) and list of
+        :class:`Bullet`values.
+
+        """
+
+        bullets = {}
+        with self.db.session() as s:
+            users = s.query(User).all()
+            for user in users:
+                name = user.realname or user.nick
+                _bullets = []
+                _bullets += (
+                    s.query(Bullet)
+                    .filter(Bullet.last_sent > datetime)
+                    .filter(Bullet.nick == user.nick)
+                    .order_by(Bullet.datetime)
+                )
+                if _bullets:
+                    bullets[name] = bullets.get(name, [])
+                    bullets[name] += _bullets
+
+            s.expunge_all()
+
+        return bullets
+
     def compile_plaintext_bullets(self, unsent_bullets=None):
         """Generate a text paragraph with user bullets
 
@@ -462,7 +490,7 @@ class BulletBot(object):
                     .update({Bullet.last_sent: sa.func.now()},
                             synchronize_session=False))
 
-    def send_bullets(self, message=None):
+    def send_bullets(self, message=None, subject=None):
         """Sends bullets to recipient per config specification.  If
         :param:`message` is provided, send this message instead.
 
@@ -480,7 +508,8 @@ class BulletBot(object):
         assert self.args.email_to, 'No email recip specified'
         assert self._email_password, 'No email pass specified'
 
-        msg['Subject'] = 'Bullets {}'.format(time.strftime("%m-%d-%Y"))
+        msg['Subject'] = subject or 'Bullets {}'.format(
+            time.strftime("%m-%d-%Y"))
         msg['From'] = self.args.email_from
         msg['To'] = self.args.email_to
 
@@ -503,6 +532,14 @@ class BulletBot(object):
 
         self.send_bullets()
         self.mark_all_sent()
+        with self.db.session() as s:
+            now = s.execute('SELECT now()').scalar()
+        if calendar.monthrange(now.year, now.month)[1] == now.day:
+            self.send_bullets(
+                message=self.compile_plaintext_bullets(self.get_bullets_after(
+                    now.replace(day=1, hour=0, minute=0))),
+                subject='Bullets {}'.format(time.strftime("%B %Y"))
+            )
 
     def set_email_password(self):
         """Sets the email password from one of two sources
