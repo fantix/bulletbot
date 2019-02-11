@@ -154,7 +154,10 @@ class SlackBulletBot(BulletBot):
 
         self.logger.info('Command [{}]: {}'.format(cmd, text))
 
-        if cmd in ['.ls', '.list']:
+        if not self._know(nick):
+            self.say(channel, HELP_MESSAGE)
+
+        elif cmd in ['.ls', '.list']:
             self.say(channel, self.list_bullets(nick))
 
         elif cmd in ['.help', '.comands']:

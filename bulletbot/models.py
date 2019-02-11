@@ -73,6 +73,19 @@ class User(Base):
         order_by=Bullet.datetime,
         back_populates='user',
     )
+    known = relationship("KnownUser")
 
     def __repr__(self):
         return ('<User({})>'.format(self.nick))
+
+
+class KnownUser(Base):
+    """Mark users who received welcome message.
+
+    As schema migration tool is not used, we are adding a new table.
+
+    """
+
+    __tablename__ = 'users'
+
+    nick = Column(String, ForeignKey('users.nick'))

@@ -27,6 +27,7 @@ from .models import (
     Recipient,
     User,
     Bullet,
+    KnownUser,
 )
 
 
@@ -170,6 +171,15 @@ class BulletBot(object):
         response = "Registered nick {} as {}".format(nick, realname)
         self.logger.info(response)
         return response
+
+    def _know(self, nick):
+        with self.db.session() as s:
+            if s.query(s.query(KnownUser).filter(
+                    KnownUser.nick == nick).exists()).scalar():
+                return True
+            ku = KnownUser()
+            ku.nick = nick
+            s.merge(ku)
 
     @staticmethod
     def unsent(s, nick):
